@@ -12,6 +12,9 @@ type model struct{
 	lastKey string
 }
 
+var first string 
+var second string
+var third string
 
 func (m model) Init() tea.Cmd{ return nil} 
 
@@ -23,10 +26,9 @@ func (m model) Update(msg tea.Msg)(tea.Model, tea.Cmd){
 		switch msg.String(){
 		case "q", "ctrl+c":
 			return m, tea.Quit
-		case "up":
-	if m.count < 10{	
-			m.count++}
-		case "down":
+		case "up", "k":
+					
+		case "down", "j":
 			if m.count >0{
 			m.count--}
 
@@ -35,7 +37,7 @@ return m, nil
 	}
 
 	func (m model) View() tea.View{
-		return tea.NewView(fmt.Sprintf("There is %d == count and to change it guess, the word: %s", m.count, m.lastKey))}
+		return tea.NewView(fmt.Sprintf("%s[%s]Bread\n%s[%s]Baguette\n%s[%s]Milk",first, second,third))}
 
 		func main(){
 		if _, err := tea.NewProgram(model{}).Run(); err != nil{
