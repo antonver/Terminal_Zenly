@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"time"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textinput"
 )
 
 type model struct {
@@ -20,9 +22,11 @@ type model struct {
 	loading        bool
 	loadingCounter int
 	t              int
+	spin spinner.Model
+	input textinput.Model
 }
-type loadingMsg struct{}
-
+type loadingMsg []string 
+type errMsg struct{}
 type tickMsg struct{}
 
 func tick(t time.Duration) tea.Cmd {
@@ -30,48 +34,70 @@ func tick(t time.Duration) tea.Cmd {
 		return tickMsg{}
 	})
 }
-func loadingF(t time.Duration) tea.Cmd {
-
-	return func() tea.Msg {
-
-		time.Sleep(t * time.Second)
-		return loadingMsg{}
+func loadingF(count int) tea.Cmd {
+	if count % 2 == 0 && count != 0 {
+	return func() tea.Msg{
+	time.Sleep(2 * time.Second)
+	return errMsg{}
 	}
+	} 
+return func() tea.Msg{
+	time.Sleep(2 * time.Second)
+	return loadingMsg{"bread", "milk", "jus", "crunchy sous"}
 }
+}
+
 func (m model) Init() tea.Cmd {
-	return tea.Batch(loadingF(2), tick(time.Second))
+	return tea.Batch(loadingF(m.loadingCounter), tick(time.Second), m.spin.Tick, m.input.Focus())
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	var cmd2 tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+		if m.input.Focused(){
+			m.input, cmd2 = m.input.Update(msg)
+		if msg.String() == "enter"{
+			if m.input.Value() == "" || m.input.Value() == " "{
+			
+			m.input.Blur()
+			}else{
+			m.list = append(m.list, m.input.Value())	
+			
+			m.input.SetValue("")
+			m.input.Blur()
+		}}
+			
+			return m, cmd2
+		}else{
+		
+		
 		m.lastKey = msg.String()
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
-		case "up", "j":
+		case "down", "j":
 			if m.cursor < len(m.list)-1 {
 				m.cursor++
 			}
-		case "down", "k":
+		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
 			}
-		case "enter", "tab":
+		case "tab":
 			if _, ok := m.chosen[m.cursor]; ok {
 				delete(m.chosen, m.cursor)
 			} else {
 				m.chosen[m.cursor] = struct{}{}
 			}
-
+		case "a":
+			return m, m.input.Focus() 
 		case "r":
 			m.loadingCounter++
-			if m.loadingCounter%2 == 0 {
-				m.isError = true
-			} else {
-				m.isError = false
+			m.isError = false
 				m.loading = true
-				return m, loadingF(2)
+				return m, tea.Batch(loadingF(m.loadingCounter), m.spin.Tick)	
 			}
 		}
 	case tea.WindowSizeMsg:
@@ -79,12 +105,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.windowWidth = msg.Width
 	case loadingMsg:
 		m.loading = false
-
+		m.list = msg
 	case tickMsg:
 		m.t++
 		return m, tick(time.Second)
+	
+	case errMsg:
+		m.loading = false
+		m.isError = true
+	case spinner.TickMsg:
+		m.spin, cmd = m.spin.Update(msg)
+		return m, cmd
 	}
-	return m, nil
+	m.input, cmd2 = m.input.Update(msg)
+	return m, cmd2 
 }
 func (m model) View() tea.View {
 	var b strings.Builder
@@ -106,9 +140,10 @@ func (m model) View() tea.View {
 			}
 			fmt.Fprintf(&b, "%s[%s]%s\n", cursor, chosen, item)
 		}
+		b.WriteString(m.input.View())
 		fmt.Fprintf(&b, "move k,j to up and down, enter to chose the item\n")
 	} else if m.loading {
-		b.WriteString("Loading...")
+		b.WriteString(m.spin.View())
 	}
 
 	fmt.Fprintf(&b, "sizes: %d x %d\n", m.windowHeight, m.windowWidth)
@@ -119,11 +154,15 @@ func (m model) View() tea.View {
 	return v
 }
 func main() {
+	spin := spinner.New()
+	spin.Spinner = spinner.Dot
+	text := textinput.New()
 	if _, err := tea.NewProgram(model{
-		list:           []string{"bread", "milk", "jus", "crunchy sous"},
 		chosen:         map[int]struct{}{},
 		loading:        true,
 		loadingCounter: 1,
+		spin: spin,
+		input: text,
 	}).Run(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
